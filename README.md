@@ -17,10 +17,10 @@ In addition, in the future version we will provide utilities for hyper-parameter
 
 ## Requirements
 
-- Numpy
-- Pandas
-- Scikit-learn
-- networkx
+- Numpy >= 1.14.5
+- Pandas >= 0.22.0
+- Scikit-learn >= 0.19.1
+- networkx >= 2.1
 
 ## Usage
 

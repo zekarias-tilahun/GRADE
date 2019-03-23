@@ -1,6 +1,6 @@
 # GRADE (*Gra*ph Embe*d*ding *E*valuation) - 0.0.1 (beta)
 
-GRADE is a library that provides a set of utilities for evaluating the performance of graph embedding (aka: Network Representation Learning - NRL) algorithms. It is intended to ease the work load during the experimental evaluation phase of NRL research. For example, one can use GRADE to compare several algorithms across a range of network analysis tasks. In this version, we have added three of the most common tasks.
+GRADE is an *open source* library that provides a set of utilities for evaluating the performance of graph embedding (aka: Network Representation Learning - NRL) algorithms. It is intended to ease the work load during the experimental evaluation phase of NRL research. For example, one can use GRADE to compare several algorithms across a range of network analysis tasks. In this version, we have added three of the most common tasks.
 
 ## Applications/Tasks
 

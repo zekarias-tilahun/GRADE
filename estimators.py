@@ -1,3 +1,11 @@
+"""
+Author: Zekarias Tilahun Kefato <zekarias.kefato@unitn.it>
+
+This module defines a set of Estimators that can be used
+in classification and regression tasks. Any class that
+inherits from the classes defined here should implement
+the `__call__` magic method.
+"""
 from sklearn.model_selection import train_test_split, ShuffleSplit
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
@@ -9,6 +17,13 @@ import numpy as np
 
 
 def _deserialize_alg_name(name):
+    """
+    A utility to deserialize a string algorithm name to the corresponding
+    sklearn model.
+
+    :param name: The algorithm name
+    :return: An sklearn model
+    """
     if name == Const.LOGISTIC_REGRESSION:
         return LogisticRegression()
     elif name == Const.RANDOM_FOREST:
@@ -21,6 +36,28 @@ class Estimator:
 
     def __init__(self, algorithm='log_reg', cv=None,
                  train_size=0.7, random_state=0, metrics=None):
+        """
+        A basic estimator for a classification task
+
+        Parameters
+        ----
+        algorithm: string, or a valid classifier from sklearn, an sklearn
+            like model for classification. If a custom model is provided, it should
+            have a method - `fit` for training and inference - `predict`.
+        cv: int
+            The number of folds for a k-fold cross-validation experiment. If it is
+            None or < 2, then a one-shot training and inference will be carried out
+
+        train_size: float
+            The fraction of the data points to be used as a training set
+
+        random_state: int
+            A seed for the pseudo-random number generator
+
+        metrics: A metrics.Metrics object
+            If evaluation of the estimators performance is desired, then
+            this should not be None.
+        """
         self._algorithm = _deserialize_alg_name(name=algorithm) if isinstance(algorithm, str) else algorithm
         self._cv = cv
         self._train_size = train_size
@@ -28,7 +65,32 @@ class Estimator:
         self._metrics = metrics
         self.results = {} if metrics is None else []
 
-    def __classify_cv(self, features, labels):
+    def __estimate_cv(self, features, labels):
+        """
+        Trains an estimator model using a fraction of the features and labels, according
+        the specified training size. The model is then used to predict the labels of the
+        test set. This procedure is carried out using a k-fold cross-validation technique.
+
+        If a metrics object is passed to the estimator, then a score will be computed
+        using the test set labels as a ground truth, otherwise the ground-truth test
+        labels and the corresponding predicted labels will be returned.
+
+        Parameters
+        ---------
+        features : numpy array
+                    The features
+        labels : numpy array
+                    The labels
+
+        Returns
+        -------
+        A dictionary or a list of dictionaries
+
+        See Also
+        --------
+        __estimate : Similar function without cross-validation
+
+        """
         ss_iter = ShuffleSplit(
             self._cv, test_size=1 - self._train_size)
         for train_index, test_index in ss_iter.split(features):
@@ -41,10 +103,30 @@ class Estimator:
                 self.results['y_hat'] = y_hat
             else:
                 self._metrics(y_true=y_test, y_hat=y_hat)
-                
-        self.results = self._metrics.scores
+                self.results = self._metrics.scores
 
-    def __classify(self, features, labels):
+    def __estimate(self, features, labels):
+        """
+        Trains an estimator model using a fraction of the features and labels, according
+        the specified training size. The model is then used to predict the labels of the
+        test set. If a metrics object is passed to the estimator, then a score will be
+        computed using the test set labels as a ground truth, otherwise the test labels
+        and the predict labels will be returned.
+
+        Parameters
+        ----------
+        features : The features
+        labels : The labels
+
+        Returns
+        -------
+        A dictionary or a list of dictionaries
+
+        See Also
+        --------
+        __estimate_cv : A similar function with k-fold cross validation
+
+        """
         x_train, x_test, y_train, y_test = train_test_split(
             features, labels, train_size=self._train_size, test_size=1 - self._train_size,
             random_state=self._random_state)
@@ -58,19 +140,41 @@ class Estimator:
 
     def __call__(self, **kwargs):
         if self._cv is None or self._cv < 2:
-            self.__classify(features=kwargs['features'], labels=kwargs['labels'])
+            self.__estimate(features=kwargs['features'], labels=kwargs['labels'])
         else:
-            self.__classify_cv(features=kwargs['features'], labels=kwargs['labels'])
+            self.__estimate_cv(features=kwargs['features'], labels=kwargs['labels'])
 
 
 class ScoreEstimator(Estimator):
 
     def __init__(self, random_state=0, metrics=None, element_wise=False, use_labels=True):
+        """
+        A basic estimator for regression task
+
+        Parameters
+        ----------
+        random_state :
+        metrics : A metrics.Metrics object
+        element_wise : bool, if true a row-wise otherwise a matrix multiplication
+            will be used to estimate scores
+        use_labels : bool, if true labels will be associated to estimated scores, and
+            the labels argument should be passed when the `__call__` method is invoked.
+        """
         self._element_wise = element_wise
         self._use_labels = use_labels
         super().__init__(algorithm='', train_size=1., random_state=random_state, metrics=metrics)
 
     def __call__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        embeddings : An embedding matrix, this should be specified
+        left_nodes : A list of indices to the embedding matrix, optional.
+        right_nodes : A list of indices to the embedding matrix, optional.
+        labels: A label to be associated with the predicted scores, optional.
+
+        :return:
+        """
         if 'embeddings' in kwargs:
             emb = kwargs['embeddings']
             left_emb = emb[0] if isinstance(emb, tuple) else emb

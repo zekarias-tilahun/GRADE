@@ -13,6 +13,7 @@ from sklearn import preprocessing
 
 from helpers import Const, sigmoid, row_dot
 
+import pandas as pd
 import numpy as np
 
 
@@ -147,7 +148,7 @@ class Estimator:
 
 class ScoreEstimator(Estimator):
 
-    def __init__(self, random_state=0, metrics=None, element_wise=False, use_labels=True):
+    def __init__(self, random_state=0, metrics=None, element_wise=False):
         """
         A basic estimator for regression task
 
@@ -157,11 +158,8 @@ class ScoreEstimator(Estimator):
         metrics : A metrics.Metrics object
         element_wise : bool, if true a row-wise otherwise a matrix multiplication
             will be used to estimate scores
-        use_labels : bool, if true labels will be associated to estimated scores, and
-            the labels argument should be passed when the `__call__` method is invoked.
         """
         self._element_wise = element_wise
-        self._use_labels = use_labels
         super().__init__(algorithm='', train_size=1., random_state=random_state, metrics=metrics)
 
     def __call__(self, **kwargs):
@@ -171,30 +169,37 @@ class ScoreEstimator(Estimator):
         embeddings : An embedding matrix, this should be specified
         left_nodes : A list of indices to the embedding matrix, optional.
         right_nodes : A list of indices to the embedding matrix, optional.
-        labels: A label to be associated with the predicted scores, optional.
+        labels: If the left_nodes and right_nodes are provided, then labels
+            should specify the label associated to each pair of left_node,
+            right_node. Otherwise, Should be a sparse or dense adjacency
+            matrix like numpy array.
 
         :return:
         """
         if 'embeddings' in kwargs:
-            emb = kwargs['embeddings']
-            left_emb = emb[0] if isinstance(emb, tuple) else emb
-            right_emb = emb[1] if isinstance(emb, tuple) else emb
-            if 'left_nodes' in kwargs and 'right_nodes' in kwargs:
-                left_indices = kwargs['left_nodes']
-                right_indices = kwargs['right_nodes']
-            else:
-                left_indices = list(range(left_emb.shape[0]))
-                right_indices = list(range(right_emb.shape[0]))
+            if self._metrics is not None and 'labels' in kwargs:
+                emb = kwargs['embeddings']
+                labels = kwargs['labels']
+                left_emb = emb[0] if isinstance(emb, tuple) else emb
+                right_emb = emb[1] if isinstance(emb, tuple) else emb
+                if 'left_nodes' in kwargs and 'right_nodes' in kwargs:
+                    left_indices = kwargs['left_nodes']
+                    right_indices = kwargs['right_nodes']
+                else:
+                    left_indices = list(range(left_emb.shape[0]))
+                    right_indices = list(range(right_emb.shape[0]))
 
-            size = len(left_indices)
-            left_emb = left_emb[left_indices]
-            right_emb = right_emb[right_indices]
-            similarity_fun = row_dot if self._element_wise else np.dot
-            probabilities = sigmoid(similarity_fun(left_emb, right_emb))
-            if self._use_labels:
-                lbl = kwargs['labels']
-                labels = [lbl] * size
-                return list(zip(probabilities, labels))
-            return probabilities
+                left_emb = left_emb[left_indices]
+                right_emb = right_emb[right_indices]
+                similarity_fun = row_dot if self._element_wise else np.dot
+                probabilities = list(zip(
+                    left_indices, right_indices, sigmoid(similarity_fun(left_emb, right_emb))))
+                if self._metrics is None:
+                    self.results = probabilities
+                else:
+                    probabilities = pd.DataFrame(probabilities, columns=['left', 'right', 'score'])
+                    self._metrics(probabilities=probabilities, labels=labels)
+            else:
+                raise ValueError("The argument labels can not be empty when a metrics object is specified")
         else:
-            raise ValueError('The __call__ magic method expects the embeddings argument')
+            raise ValueError('The __call__ magic method expects the embeddings and labels argument')

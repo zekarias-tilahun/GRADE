@@ -106,13 +106,11 @@ def _predict_score_based(true_edges, false_edges, embeddings, estimator):
     """
     true_left_nodes, true_right_nodes = unzip_edges(true_edges)
     false_left_nodes, false_right_nodes = unzip_edges(false_edges)
-
-    results_true = estimator(embeddings=embeddings, left_nodes=true_left_nodes, right_nodes=true_right_nodes, labels=1)
-    results_false = estimator(embeddings=embeddings, left_nodes=false_left_nodes, right_nodes=false_right_nodes,
-                              labels=0)
-    results = results_true + results_false
-    probs, y_true = list(zip(*sorted(results, key=lambda l: l[0], reverse=True)))
-    return {'y_true': y_true, 'probs': probs}
+    left_nodes = true_left_nodes + false_left_nodes
+    right_nodes = true_right_nodes + false_right_nodes
+    labels = np.concatenate((np.ones(len(true_left_nodes)), np.zeros(len(false_left_nodes))))
+    estimator(embeddings=embeddings, left_nodes=left_nodes, right_nodes=right_nodes, labels=labels)
+    return estimator.results
 
 
 def _predict_feature_based(true_edges, false_edges, embeddings, builder, estimator):

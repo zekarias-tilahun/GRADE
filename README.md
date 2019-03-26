@@ -113,6 +113,9 @@ A path to the residual graph. Usually, for the purpose of link prediction experi
 `--rate:`
 A value in (0, 1): the sampling rate, the fraction of edges to be sampled.
 
+`--hard-neg:`
+A boolean flag, for every true and a non-reciprocal directed edge (u, v), the edge (v, u) is considered as a hard negative edge and setting this option to true will ensure that (v, u) is included among the negative (false) edge samples.
+
 ### Link prediction options
 The following options will be required for link prediction experiment
 
@@ -142,7 +145,7 @@ Given the embeddings of the left and right incident nodes of a list of edges, th
 The following options will be used for network reconstruction experiment, but they are not mandatory. For large graphs, the following options will enable efficient space and time usage.
 
 `--threshold:`
-A value in [0, 1], it will be used to prune reconstructed edges having a link probability less than the specified threshold
+A value in [0, 1], it will be used to prune reconstructed edges having a link probability less than the specified threshold. If batch_size is specified, and threshold is not specified, then internally threshold will be set to 0.7 by default.
 
 `--batch-size:`
 A integer value, when it is specified reconstruction will be carried out in batches as opposed to all pairs alternative.

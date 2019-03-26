@@ -25,12 +25,13 @@ from estimators import ScoreEstimator
 from nrlio import Reader
 from helpers import *
 
+import pandas as pd
 import numpy as np
 
 import sys
 
 
-def _full_reconstruction(embeddings, estimator):
+def _full_reconstruction(embeddings, estimator, ground_truth=None):
     """
     Network reconstruction computed based on the similarity between
     every pair of nodes (n*n - run-time), where the similarity
@@ -44,6 +45,8 @@ def _full_reconstruction(embeddings, estimator):
                     n - the number of nodes and
 
                     d - the embedding dimension
+                    
+                    
     :return: list: A list of edges along with their weights estimated using the
                 similarity between the embedding of the nodes
 
@@ -56,10 +59,10 @@ def _full_reconstruction(embeddings, estimator):
     ... # For asymmetric reconstruction
 
     """
-    return [estimator(embeddings=embeddings)]
+    estimator(embeddings=embeddings, labels=ground_truth)
+    return [estimator.results]
 
-
-def _batch_reconstruction(embeddings, batch_size, estimator, threshold=0.5):
+def _batch_reconstruction(embeddings, ground_truth, estimator, batch_size, threshold=0.7):
     """
     Batch network reconstruction; useful when the number of nodes is large.
     For every batch the similarity between the nodes in the batch with the
@@ -90,14 +93,18 @@ def _batch_reconstruction(embeddings, batch_size, estimator, threshold=0.5):
     def delegate(source_emb, target_emb):
         num_nodes = source_emb.shape[0]
         partial_reconstruction = []
+        estimator.skip_eval(True)
         for i in range(0, source_emb.shape[0], batch_size):
             end = i + batch_size if num_nodes - batch_size > i else num_nodes
             batch_nodes = list(range(i, end))
             batch_embedding = source_emb[batch_nodes]
-            sim = estimator(embeddings=(batch_embedding, target_emb))
-            indices = np.where(sim > threshold)
-            partial_reconstruction += list(
-                zip(indices[0].tolist(), indices[1].tolist(), sim[indices]))
+            estimator(embeddings=(batch_embedding, target_emb), labels=ground_truth)
+            filtered_batch = estimator.results[estimator.results[:, 2] > threshold]
+            if len(partial_reconstruction) == 0:
+                partial_reconstruction = filtered_batch
+            else:
+                partial_reconstruction = np.concatenate([partial_reconstruction, filtered_batch])
+            
         return partial_reconstruction
 
     if isinstance(embeddings, tuple):
@@ -105,14 +112,20 @@ def _batch_reconstruction(embeddings, batch_size, estimator, threshold=0.5):
               f'and a threshold {threshold}')
         source_target_reconstruction = delegate(embeddings[0], embeddings[1])
         target_source_reconstruction = delegate(embeddings[1], embeddings[0])
-        return source_target_reconstruction + target_source_reconstruction
+        reconstruction = np.concatenate([source_target_reconstruction, target_source_reconstruction])
     else:
         print(f'Running symmetric network reconstruction in batches of {batch_size} '
               f'and a threshold {threshold}')
-        return delegate(embeddings, embeddings)
+        reconstruction = delegate(embeddings, embeddings)
+    if estimator._metrics is not None:
+        estimator.skip_eval(False)
+        df = pd.DataFrame(reconstruction, columns=['left', 'right', 'score'])
+        estimator._metrics(probabilities=df, labels=ground_truth)
+        return estimator._metrics.scores
+    return reconstruction
 
 
-def reconstruct(embeddings, estimator, threshold=None, batch_size=None):
+def reconstruct(embeddings, ground_truth, options):
     """
     Symmetric or asymmetric network reconstruction. If embeddings is
     a numpy array, the reconstruction is symmetric, i.e. the reconstruction
@@ -120,26 +133,26 @@ def reconstruct(embeddings, estimator, threshold=None, batch_size=None):
     is asymmetric, and hence directed.
 
     Parameters
-    ----
-
+    ----------
     embeddings : An embedding array of (n x d), or a tuple of embedding arrays
                 of (n x d) each.
-    estimator : estimator.Estimator or its subclass object
-                The estimator used for reconstruction
-    threshold: float
-                A threshold for pruning
-    batch_size: int
-                If a batch size is specified the reconstruction is done in batches.
-                This is preferable for large networks.
-    :return:
+    ground_truth : scipy csr sparse matrix or numpy dense matrix
+                The ground truth adjacency matrix for evaluation, this becomes
+                optional if the options argument has not metric names.
+    options : config options
+    
+    Returns
+    -------
     """
+    metrics = Metrics(names=options.metric_names, k_values=options.k_values) \
+        if options.metric_names is not None and len(options.metric_names) > 0 else None
     def filter_edges(recon):
         indices = np.where(recon > threshold)
         return list(zip(indices[0], indices[1], recon[indices]))
-    
+    estimator = ScoreEstimator(element_wise=False, metrics=metrics)
     if batch_size is None or batch_size == 0:
         link_probabilities = _full_reconstruction(
-            embeddings=embeddings, estimator=estimator)
+            embeddings=embeddings, estimator=estimator, ground_truth=ground_truth)
         if len(link_probabilities) == 2:
             edges = filter_edges(link_probabilities[0]) + filter_edges(link_probabilities[1])
         else:
@@ -165,10 +178,7 @@ def main():
         parser = ConfigParser(task=Const.NET_RECONSTRUCTION_TASK)
         options = parser
     reader = Reader(task=Const.NET_RECONSTRUCTION_TASK, options=options)
-    estimator = ScoreEstimator(element_wise=True, use_labels=False)
-    reconstruction = reconstruct(
-        embeddings=reader.embeddings, threshold=options.threshold,
-        estimator=estimator, batch_size=options.batch_size)
+    reconstruction = reconstruct(embeddings=reader.embeddings, ground_truth=reader.network, options=options)
     return reconstruction
 
 

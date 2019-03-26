@@ -195,8 +195,7 @@ def predict(true_edges, false_edges, embeddings, options, builder=None):
             results += [{**{'train_size': ts}, **output} for output in outputs]
     elif options.lp_method == Const.SCORE_BASED_LP_METHOD:
         print('Score based link prediction')
-        estimator = ScoreEstimator(
-            train_size=options.train_size, random_state=options.seed, metrics=metrics)
+        estimator = ScoreEstimator(random_state=options.seed, metrics=metrics, element_wise=True)
         results = _predict_score_based(
             true_edges=true_edges, false_edges=false_edges,
             embeddings=embeddings, estimator=estimator)
@@ -204,7 +203,7 @@ def predict(true_edges, false_edges, embeddings, options, builder=None):
 
 
 def main():
-    if sys.argv[0] == 'tasks/node_classification.py' and len(sys.argv) > 1:
+    if sys.argv[0] == 'tasks/link_prediction.py' and len(sys.argv) > 1:
         parser = ArgParser(task=Const.LINK_PREDICTION_TASK)
         options = parser.args
     else:
@@ -217,14 +216,16 @@ def main():
         embeddings=reader.embeddings, builder=builder, options=options)
     if options.lp_method == Const.FEATURE_BASED_LP_METHOD and \
             options.metric_names is not None and len(options.metric_names) > 0:
-        if 'pak' in options.metric_names:
-            by = ['train_size', 'metrics', 'feature_builder', 'k']
+        if options.cv > 1 and 'pak' in options.metric_names:
+            by, target = ['train_size', 'metrics', 'feature_builder', 'k'], 'value'
+        elif options.cv > 1 and 'pak':
+            by, target = ['train_size', 'metrics', 'feature_builder'], 'value'
         else:
-            by = ['train_size', 'metrics', 'feature_builder']
-        return compile_metrics(results_lod=results, by=by, target='value', agg=options.cv > 1)
+            by, target = None, None
+        return compile_metrics(results_lod=results, by=by, target=target)
     else:
-        return results
+        return compile_metrics(results)
 
 
 if __name__ == '__main__':
-    main()
+    print(main())

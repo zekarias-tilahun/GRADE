@@ -40,7 +40,10 @@ class Reader(object):
         else:
             self.__read_embedding()
             if self.task == Const.NET_RECONSTRUCTION_TASK:
-                self.__read_network()
+                if self._options.has_metrics():
+                    self.__read_network()
+                else:
+                    self.network = None
             elif self.task == Const.LINK_PREDICTION_TASK:
                 self.__read_sampled_edges()
             elif self.task == Const.NODE_CLASSIFICATION_TASK:

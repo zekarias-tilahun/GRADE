@@ -11,7 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn import preprocessing
 
-from helpers import Const, sigmoid, row_dot
+from helpers import Const, sigmoid, row_dot, dot
 
 import pandas as pd
 import numpy as np
@@ -64,7 +64,12 @@ class Estimator:
         self._train_size = train_size
         self._random_state = random_state
         self._metrics = metrics
+        self._skip_eval = self._metrics is None
         self.results = {} if metrics is None else []
+        
+    @property
+    def skip_eval(self, value):
+        self._skip_eval = value
 
     def __estimate_cv(self, features, labels):
         """
@@ -99,7 +104,7 @@ class Estimator:
             y_train, y_test = labels[train_index], labels[test_index]
             pipe = make_pipeline(preprocessing.Normalizer(), self._algorithm)
             y_hat = pipe.fit(X=x_train, y=y_train).predict(x_test)
-            if self._metrics is None:
+            if self._metrics is None or self._skip_eval:
                 self.results['y_true'] = y_test
                 self.results['y_hat'] = y_hat
             else:
@@ -164,6 +169,7 @@ class ScoreEstimator(Estimator):
 
     def __call__(self, **kwargs):
         """
+        
         Parameters
         ----------
         embeddings : An embedding matrix, this should be specified
@@ -172,34 +178,35 @@ class ScoreEstimator(Estimator):
         labels: If the left_nodes and right_nodes are provided, then labels
             should specify the label associated to each pair of left_node,
             right_node. Otherwise, Should be a sparse or dense adjacency
-            matrix like numpy array.
+            matrix like numpy array. Labels can be non if the estimator's
+            _metrics object inhertied from the base class is None
 
         :return:
         """
         if 'embeddings' in kwargs:
-            if self._metrics is not None and 'labels' in kwargs:
-                emb = kwargs['embeddings']
-                labels = kwargs['labels']
-                left_emb = emb[0] if isinstance(emb, tuple) else emb
-                right_emb = emb[1] if isinstance(emb, tuple) else emb
-                if 'left_nodes' in kwargs and 'right_nodes' in kwargs:
-                    left_indices = kwargs['left_nodes']
-                    right_indices = kwargs['right_nodes']
-                else:
-                    left_indices = list(range(left_emb.shape[0]))
-                    right_indices = list(range(right_emb.shape[0]))
+            emb = kwargs['embeddings']
+            left_emb = emb[0] if isinstance(emb, tuple) else emb
+            right_emb = emb[1] if isinstance(emb, tuple) else emb
+            if 'left_nodes' in kwargs and 'right_nodes' in kwargs:
+                left_indices = kwargs['left_nodes']
+                right_indices = kwargs['right_nodes']
+            else:
+                left_indices = list(range(left_emb.shape[0]))
+                right_indices = list(range(right_emb.shape[0]))
 
-                left_emb = left_emb[left_indices]
-                right_emb = right_emb[right_indices]
-                similarity_fun = row_dot if self._element_wise else np.dot
-                probabilities = list(zip(
-                    left_indices, right_indices, sigmoid(similarity_fun(left_emb, right_emb))))
-                if self._metrics is None:
-                    self.results = probabilities
-                else:
+            left_emb = left_emb[left_indices]
+            right_emb = right_emb[right_indices]
+            sim_fun = row_dot if self._element_wise else dot
+            probabilities = list(zip(left_indices, right_indices, sigmoid(sim_fun(left_emb, right_emb))))
+            if self._metrics is None or self._skip_eval:
+                self.results = np.array(probabilities)
+            else:
+                if 'labels' in kwargs:
+                    labels = kwargs['labels']
                     probabilities = pd.DataFrame(probabilities, columns=['left', 'right', 'score'])
                     self._metrics(probabilities=probabilities, labels=labels)
-            else:
-                raise ValueError("The argument labels can not be empty when a metrics object is specified")
+                    self.results = self._metrics.scores
+                else:
+                    raise ValueError("The argument labels can not be empty when a metrics object is specified")
         else:
             raise ValueError('The __call__ magic method expects the embeddings and labels argument')

@@ -10,29 +10,28 @@ def _auc_score(y_true, y_hat, pos_label=1):
 
 
 def _precision_at_k_values(probabilities, labels, k_values=None):
-    sorted_probabilities = probabilities.sort_values(by='scores', ascending=False)
+    
     dim = labels.ndim
-    if dim == 1 or dim == 2:
-        if k_values is None:
-            return labels[labels == 1] / labels.size
-        precision_aks = []
-        for k in k_values:
-            df_k = sorted_probabilities.iloc[:k]
-            indices = df_k.loc.values if dim == 1 else (df_k.values[0], df_k.values[1])
-            ordered_labels_k = labels[indices]
-            pak = ordered_labels_k[ordered_labels_k == 1].size / k
-            precision_aks += [{'k': k, 'value': pak}]
-        return precision_aks
-    else:
-        raise ValueError(f"Expecting a 1d or 2d labels argument, but found a {dim}d array")
+    assert dim == 1 or dim  == 2, f"Expecting a 1d or 2d array for labels argument, but found a {dim}d array"
+    sorted_probabilities = probabilities.sort_values(by='score', ascending=False)
+    if k_values is None:
+        return labels[labels == 1] / labels.size
+    precision_aks = []
+    for k in k_values:
+        df_k = sorted_probabilities.iloc[:k]
+        indices = df_k.index if dim == 1 else (df_k.values[0], df_k.values[1])
+        ordered_labels_k = labels[indices]
+        
+        pak = ordered_labels_k[ordered_labels_k == 1].size / k
+        precision_aks += [{'k': k, 'value': pak}]
+    return precision_aks
 
-
-def compile_metrics(results_lod, by, target, agg=False):
+def compile_metrics(results_lod, by=None, target=None):
     df = pd.DataFrame(results_lod)
-    if agg:
-        return df.groupby(by)[target].agg([np.mean, np.std]).reset_index()
-    else:
+    if by is None or target is None:
         return df
+    else:
+        return df.groupby(by)[target].agg([np.mean, np.std]).reset_index()
 
 
 class Metrics:

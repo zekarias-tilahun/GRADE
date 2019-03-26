@@ -92,6 +92,9 @@ class ConfigParser:
         self._config = configparser.ConfigParser()
         self._config.read(path)
         self.__parse()
+        
+    def has_metrics(self):
+        return self.metric_names is not None and len(self.metric_names) > 0
 
     def __graph_args(self):
         self.net_file = self._config.get(section='graph-args', option='net_file')
@@ -127,6 +130,7 @@ class ConfigParser:
     def __net_sampling_args(self):
         self.res_file = self._config.get(section='net-sampling-args', option='res_file')
         self.rate = self._config.getfloat(section='net-sampling-args', option='rate')
+        self.hard_neg = self._config.getboolean(section='net-sampling-args', option='hard_neg')
         self.__graph_args()
         self.__edge_sample_args()
 
@@ -232,13 +236,30 @@ def sigmoid(z):
     return 1 / (1 + np.exp(-z))
 
 
+def dot(x, y):
+    return np.dot(x, y.T)
+
+
 def row_dot(x, y):
     """
-    Computes a row wise dot product between matrix x and y
+    Computes a row wise dot product between matrix x and y, which is
+    similar to
+        
+            >>> np.dot(x[i], y[i])
+            ... # for 0 <= i < x.shape[0]
 
-    :param x: Matrix x
-    :param y: Matrix y
-    :return:
+    Parameters
+    ----------
+    x: Matrix x
+    y: Matrix y
+    
+    Returns
+    -------
+    A 1d numpy array
+    
+    See Also
+    --------
+    dot: A matrix multiplication between x and y
     """
     msg = "The number of rows for matrix x and y should be the same"
     assert x.shape[0] == y.shape[0], msg

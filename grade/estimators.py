@@ -11,7 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn import preprocessing
 
-from helpers import Const, sigmoid, row_dot, dot
+from grade.helpers import Const, sigmoid, row_dot, dot
 
 import pandas as pd
 import numpy as np
@@ -63,11 +63,15 @@ class Estimator:
         self._cv = cv
         self._train_size = train_size
         self._random_state = random_state
-        self._metrics = metrics
-        self._skip_eval = self._metrics is None
+        self._skip_eval = metrics is None
+        self.metrics = metrics
         self.results = {} if metrics is None else []
-        
+
     @property
+    def skip_eval(self):
+        return self._skip_eval
+
+    @skip_eval.setter
     def skip_eval(self, value):
         self._skip_eval = value
 
@@ -104,12 +108,12 @@ class Estimator:
             y_train, y_test = labels[train_index], labels[test_index]
             pipe = make_pipeline(preprocessing.Normalizer(), self._algorithm)
             y_hat = pipe.fit(X=x_train, y=y_train).predict(x_test)
-            if self._metrics is None or self._skip_eval:
+            if self.metrics is None or self.skip_eval:
                 self.results['y_true'] = y_test
                 self.results['y_hat'] = y_hat
             else:
-                self._metrics(y_true=y_test, y_hat=y_hat)
-                self.results = self._metrics.scores
+                self.metrics(y_true=y_test, y_hat=y_hat)
+                self.results = self.metrics.scores
 
     def __estimate(self, features, labels):
         """
@@ -137,12 +141,12 @@ class Estimator:
             features, labels, train_size=self._train_size, test_size=1 - self._train_size,
             random_state=self._random_state)
         self._algorithm.fit(X=x_train, y=y_train)
-        y_hat=self._algorithm.predict(X=x_test)
-        if self._metrics is None:
+        y_hat = self._algorithm.predict(X=x_test)
+        if self.metrics is None or self.skip_eval:
             self.results = {'y_true': y_test, 'y_hat': y_hat}
         else:
-            self._metrics(y_true=y_test, y_hat=y_hat)
-            self.results = self._metrics.scores
+            self.metrics(y_true=y_test, y_hat=y_hat)
+            self.results = self.metrics.scores
 
     def __call__(self, **kwargs):
         if self._cv is None or self._cv < 2:
@@ -179,7 +183,7 @@ class ScoreEstimator(Estimator):
             should specify the label associated to each pair of left_node,
             right_node. Otherwise, Should be a sparse or dense adjacency
             matrix like numpy array. Labels can be non if the estimator's
-            _metrics object inhertied from the base class is None
+            metrics object inherited from the base class is None
 
         :return:
         """
@@ -198,14 +202,14 @@ class ScoreEstimator(Estimator):
             right_emb = right_emb[right_indices]
             sim_fun = row_dot if self._element_wise else dot
             probabilities = list(zip(left_indices, right_indices, sigmoid(sim_fun(left_emb, right_emb))))
-            if self._metrics is None or self._skip_eval:
+            if self.metrics is None or self.skip_eval:
                 self.results = np.array(probabilities)
             else:
                 if 'labels' in kwargs:
                     labels = kwargs['labels']
                     probabilities = pd.DataFrame(probabilities, columns=['left', 'right', 'score'])
-                    self._metrics(probabilities=probabilities, labels=labels)
-                    self.results = self._metrics.scores
+                    self.metrics(probabilities=probabilities, labels=labels)
+                    self.results = self.metrics.scores
                 else:
                     raise ValueError("The argument labels can not be empty when a metrics object is specified")
         else:

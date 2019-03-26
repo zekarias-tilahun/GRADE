@@ -1,3 +1,12 @@
+"""
+Author: Zekarias Tilahun Kefato
+
+This module provides the necessary helper utilities. These includes, Parser
+classes to read options from a command line or a config.ini file.
+In addition it contains a Builder class for specifying edge feature construction
+methods and a few other helper functions for numerical and analytical operations.
+"""
+
 import pandas as pd
 import numpy as np
 
@@ -6,6 +15,7 @@ import argparse
 
 
 class Const:
+
     NET_SAMPLING_TASK = 0
     NET_RECONSTRUCTION_TASK = 1
     LINK_PREDICTION_TASK = 2
@@ -24,12 +34,33 @@ class Const:
     
 
 class Builder:
-    
+
     def __init__(self, names=None, custom=False):
+        """
+        A helper class for compiling a set of predefined edge feature building
+        methods
+
+        Parameters
+        ----------
+        names : set, list
+                A set of names of the feature builder functions
+        custom: bool
+                It should be set to True whenever it's extended by a custom
+                feature builder to specify a desired set of feature builders.
+                Note that any subclass of Builder also have to implement
+                the `_custom_compile` method in addition to setting this
+                argument to True, and the method should return a dictionary
+                where the keys are the names and values are the definitions
+                of the feature builder functions.
+        """
         self._names = names
         self._custom = custom
 
     def __compile(self):
+        """
+        A method for compiling the set of predefined feature builder functions
+
+        """
         builders = {}
         for name in self._names:
             if name == 'hd' or name == 'all':
@@ -45,14 +76,15 @@ class Builder:
                                  f"hd, avg, wl1, wl2, all.")
         return builders
 
-    def custom_compiler(self):
+    def _custom_compile(self):
         """
         The implementation of this method should return a dictionary, where
         the keys are the names and values are the definitions of the feature
         builder functions.
 
         Note that the subclass which implements this method should set
-        custom=True as:
+        custom=True when invoking the constructor (__init__) of the superclass
+        as:
 
             >>> super().__init__(names={'name_1', 'name_2'}, custom=True)
             ... # names is optional
@@ -62,8 +94,12 @@ class Builder:
         pass
         
     def compile(self):
+        """
+        A wrapper around the `__compile` and `_custom_compile` methods
+
+        """
         if self._custom:
-            return self.custom_compiler()
+            return self._custom_compile()
         else:
             return self.__compile()
 
@@ -71,6 +107,15 @@ class Builder:
 class ArgParser:
 
     def __init__(self, task):
+        """
+        A parser for options provided via command line (terminal)
+
+        Parameters
+        ----------
+        task : string
+                The identifier of the desired task, check out
+                the Const class to see the existing tasks
+        """
         if task == Const.NET_SAMPLING_TASK:
             self._args = _net_sampling_parse_args()
         elif task == Const.NET_RECONSTRUCTION_TASK:
@@ -88,21 +133,47 @@ class ArgParser:
 class ConfigParser:
 
     def __init__(self, task, path='config.ini'):
+        """
+        A parser for options provided via config file
+
+        Parameters
+        ----------
+        task : string
+                The identifier of the desired task, check out
+                the Const class to see the existing tasks
+        path : string
+                A path to the config.ini file
+        """
         self._task = task
         self._config = configparser.ConfigParser()
         self._config.read(path)
         self.__parse()
         
     def has_metrics(self):
+        """
+        Checks if a set of metric names have been provided
+
+        Returns
+        -------
+        True metric_names is defined, otherwise False
+        """
         return self.metric_names is not None and len(self.metric_names) > 0
 
     def __graph_args(self):
+        """
+        Options for reading and writing a graph
+
+        """
         self.net_file = self._config.get(section='graph-args', option='net_file')
         self.net_format = self._config.get(section='graph-args', option='net_format')
         self.directed = self._config.getboolean(section='graph-args', option='directed')
         self.weighted = self._config.getboolean(section='graph-args', option='weighted')
 
     def __embedding_args(self):
+        """
+        Options for reading and writing embeddings
+
+        """
         file_patterns = self._config.get(section='embedding-args', option='emb_file').strip().split()
         formats = self._config.get(section='embedding-args', option='emb_format').strip().split()
         if len(file_patterns) == 1 and len(formats) == 1:
@@ -124,10 +195,18 @@ class ConfigParser:
             self.emb_format = formats
 
     def __edge_sample_args(self):
+        """
+        Options for reading and writing sampled edges
+
+        """
         self.pos_file = self._config.get(section='edge-sample-args', option='pos_file')
         self.neg_file = self._config.get(section='edge-sample-args', option='neg_file')
 
     def __net_sampling_args(self):
+        """
+        Options for carrying out network sampling
+
+        """
         self.res_file = self._config.get(section='net-sampling-args', option='res_file')
         self.rate = self._config.getfloat(section='net-sampling-args', option='rate')
         self.hard_neg = self._config.getboolean(section='net-sampling-args', option='hard_neg')
@@ -135,17 +214,29 @@ class ConfigParser:
         self.__edge_sample_args()
 
     def __eval_metric_args(self):
+        """
+        Options for evaluation
+
+        """
         self.metric_names = self._config.get(section='eval-metric-args', option='metrics').strip().split()
         self.k_values = [int(op) for op in
                          self._config.get(section='eval-metric-args', option='k_values').strip().split()]
 
     def __hyper_param_args(self):
+        """
+        Options for specifying hyper-parameters
+
+        """
         self.train_size = [float(ts) for ts in
                            self._config.get(section='hyper-param-args', option='train_size').strip().split()]
         self.seed = self._config.getint(section='hyper-param-args', option='seed')
         self.cv = self._config.getint(section='hyper-param-args', option='cv')
 
     def __net_reconstruction_args(self):
+        """
+        Options for carrying out network reconstruction experiment
+
+        """
         self.threshold = self._config.getfloat(section='net-reconstruction-args', option='threshold')
         self.batch_size = self._config.getint(section='net-reconstruction-args', option='batch_size')
         self.__graph_args()
@@ -153,6 +244,10 @@ class ConfigParser:
         self.__eval_metric_args()
 
     def __link_prediction_args(self):
+        """
+        Options for carrying out link prediction experiment
+
+        """
         self.lp_method = self._config.get(section='link-prediction-args', option='lp_method')
         self.feature_builders = self._config.get(section='link-prediction-args', option='builders').strip().split()
         self.__embedding_args()
@@ -161,12 +256,20 @@ class ConfigParser:
         self.__hyper_param_args()
 
     def __node_classification_args(self):
+        """
+        Options for carrying out node classification experiment
+
+        """
         self.label_file = self._config.get(section='node-classification-args', option='label_file')
         self.__embedding_args()
         self.__eval_metric_args()
         self.__hyper_param_args()
 
     def __parse(self):
+        """
+        A wrapper for reading options
+
+        """
         if self._task == Const.NET_SAMPLING_TASK:
             self.__net_sampling_args()
         elif self._task == Const.NET_RECONSTRUCTION_TASK:
@@ -177,52 +280,30 @@ class ConfigParser:
             self.__node_classification_args()
 
 
-def aggregate_cv_nc(cv_scores):
-    agg_scores = {}
-    for tr in cv_scores:
-        tr_df = pd.DataFrame.from_dict(cv_scores[tr], orient='index')
-        agg_scores[tr] = {}
-        for col_name in tr_df.columns.tolist():
-            summary = tr_df[col_name].describe()
-            agg_scores[tr][col_name] = {'mean': summary.loc['mean'], 'std': summary.loc['std']}
-    return agg_scores
-
-
-def aggregate_cv_lp(cv_scores):
-    agg_scores = {}
-
-    for tr in cv_scores:
-        agg_scores[tr] = {}
-        for name in cv_scores[tr]:
-            agg_scores[tr][name] = {}
-            for iteration in cv_scores[tr][name]:
-                for metric in cv_scores[tr][name][iteration]:
-                    if metric not in agg_scores[tr][name]:
-                        agg_scores[tr][name][metric] = {}
-                    for k in cv_scores[tr][name][iteration][metric]:
-                        if k not in agg_scores[tr][name][metric]:
-                            agg_scores[tr][name][metric][k] = [cv_scores[tr][name][iteration][metric][k]]
-                        else:
-                            agg_scores[tr][name][metric][k].append(cv_scores[tr][name][iteration][metric][k])
-
-    for tr in agg_scores:
-        for name in agg_scores[tr]:
-            for metric in agg_scores[tr][name]:
-                for k in agg_scores[tr][name][metric]:
-                    avg =  np.mean(agg_scores[tr][name][metric][k])
-                    std =  np.std(agg_scores[tr][name][metric][k])
-                    agg_scores[tr][name][metric][k] = {'mean': avg, 'std': std}
-    return agg_scores
-            
-
 def sort_array(array, by_column=0, ascending=True):
+    """
+    Sorts an array by a given column in ascending or descending order
+
+    Parameters
+    ----------
+    array : numpy array
+            The array
+    by_column : int
+            A column index to sort the array by
+    ascending : bool
+            Whether the sort should be in ascending order or not
+
+    Returns
+    -------
+    An array sorted by a given column
+    """
     arr = array[array[:, by_column].argsort()]
     return arr if ascending else arr[::-1]
 
 
 def unzip_edges(edges):
     """
-    Deconstructs a list of edges (tuples) into a tuple of a list of left nodes
+    Deconstructs a list of edges (pairs) into a tuple of a list of left nodes
     and list of right nodes.
 
     :param edges:
@@ -233,25 +314,56 @@ def unzip_edges(edges):
 
 
 def sigmoid(z):
+    """
+    Applies a sigmoid function to the input z
+
+    Parameters
+    ----------
+    z : a scalar value or an nd-array
+
+    Returns
+    -------
+    A scalar value or an nd-array depending on the input
+    """
     return 1 / (1 + np.exp(-z))
 
 
 def dot(x, y):
+    """
+    Computes the dot product between x, y transpose, nd-arrays.
+    x and y should have the same kind of shape
+
+    Parameters
+    ----------
+    x : nd-array
+        A numpy array or scipy sparse matrix
+    y : nd-array
+        A numpy array or scipy sparse matrix
+
+    Returns
+    -------
+    A scalar value or a nd-array
+
+    See Also
+    --------
+    row_dot: A row wise dot product
+    """
     return np.dot(x, y.T)
 
 
 def row_dot(x, y):
     """
-    Computes a row wise dot product between matrix x and y, which is
-    similar to
+    Computes a row wise dot product between x and y, nd-arrays. Which is
+    similar to:
         
-            >>> np.dot(x[i], y[i])
-            ... # for 0 <= i < x.shape[0]
+            >>> for i in range(x.shape[0]): np.dot(x[i], y[i])
 
     Parameters
     ----------
-    x: Matrix x
-    y: Matrix y
+    x : nd-array
+        A numpy array or scipy sparse matrix
+    y : nd-array
+        A numpy array or scipy sparse matrix
     
     Returns
     -------

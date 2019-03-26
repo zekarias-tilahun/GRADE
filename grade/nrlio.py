@@ -1,30 +1,60 @@
+"""
+Author: Zekarias Tilahun Kefato
+
+The module provides a set of input and output utilities that are necessary
+for GRADE's execution.
+"""
 from sklearn.preprocessing import normalize
 from scipy import sparse as sp
-from helpers import Const
+from grade.helpers import Const
 
 import networkx as nx
 import pandas as pd
 import numpy as np
 
+import os
+
 
 class Reader(object):
 
     def __init__(self, task, options):
+        """
+        Reads the necessary inputs required to execute a specified task
+
+        Parameters
+        ----------
+        task : string
+            The specified task
+        options : helpers.ArgParser or helpers.ConfigParser options
+            Options compiled from command line or config input
+        """
         self.task = task
         self._options = options
         self.__read()
 
     def __read_embedding(self):
+        """
+        A wrapper around read_embeddings
+
+        """
         self.embeddings = read_embeddings(
             files=self._options.emb_file, formats=self._options.emb_format)
 
     def __read_network(self):
+        """
+        A wrapper around read_network
+
+        """
         opts = self._options
         self.network = read_network(
             path=opts.net_file, directed=opts.directed, weighted=opts.weighted,
             input_format=opts.net_format)
 
     def __read_sampled_edges(self):
+        """
+        A wrapper around read_network, invoked twice
+
+        """
         opts = self._options
         true_graph = read_network(path=opts.pos_file)
         self.true_edges = list(true_graph.edges)
@@ -32,9 +62,17 @@ class Reader(object):
         self.false_edges = list(false_graph.edges)
 
     def __read_labels(self):
+        """
+        A wrapper around read_labels
+
+        """
         self.labels = read_labels(path=self._options.label_file)
 
     def __read(self):
+        """
+        A wrapper for reading the necessary inputs for the specified task
+
+        """
         if self.task == Const.NET_SAMPLING_TASK:
             self.__read_network()
         else:
@@ -51,6 +89,10 @@ class Reader(object):
 
     @property
     def has_sym_embedding(self):
+        """
+        Checks if Reader.embeddings is symmetric embedding or not.
+
+        """
         return not isinstance(self.embeddings, tuple)
 
 
@@ -165,6 +207,17 @@ def read_embedding(path, input_format=None, keys=None):
     
 
 def read_embeddings(files, formats):
+    """
+    Reads 1 or more embeddings embeddings
+
+    files: str, list
+        It could be a path to a file containing an embedding or multiple embeddings,
+        for example *.npz file. It could also be a list of paths for multiple embedding
+        files.
+    formats: str, list, dict
+        The format of each file in files
+
+    """
     if isinstance(files, str) and isinstance(formats, str):
         return read_embedding(path=files, input_format=formats)
     elif isinstance(formats, dict):

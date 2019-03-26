@@ -1,5 +1,5 @@
-from helpers import Const, ConfigParser, ArgParser
-from nrlio import Reader, write_nx_graph, write_list_of_tuples
+from grade.helpers import Const, ConfigParser, ArgParser
+from grade.nrlio import Reader, write_nx_graph, write_list_of_tuples
 
 import datetime as dt
 import networkx as nx

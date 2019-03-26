@@ -21,9 +21,9 @@ Note that at least an embedding matrix should be provided to execute
 this module by calling the `reconstruct` method
 """
 
-from estimators import ScoreEstimator
-from nrlio import Reader
-from helpers import *
+from grade.estimators import ScoreEstimator
+from grade.nrlio import Reader
+from grade.helpers import *
 
 import pandas as pd
 import numpy as np
@@ -62,6 +62,7 @@ def _full_reconstruction(embeddings, estimator, ground_truth=None):
     estimator(embeddings=embeddings, labels=ground_truth)
     return [estimator.results]
 
+
 def _batch_reconstruction(embeddings, ground_truth, estimator, batch_size, threshold=0.7):
     """
     Batch network reconstruction; useful when the number of nodes is large.
@@ -93,7 +94,7 @@ def _batch_reconstruction(embeddings, ground_truth, estimator, batch_size, thres
     def delegate(source_emb, target_emb):
         num_nodes = source_emb.shape[0]
         partial_reconstruction = []
-        estimator.skip_eval(True)
+        estimator.skip_eval = True
         for i in range(0, source_emb.shape[0], batch_size):
             end = i + batch_size if num_nodes - batch_size > i else num_nodes
             batch_nodes = list(range(i, end))
@@ -117,11 +118,11 @@ def _batch_reconstruction(embeddings, ground_truth, estimator, batch_size, thres
         print(f'Running symmetric network reconstruction in batches of {batch_size} '
               f'and a threshold {threshold}')
         reconstruction = delegate(embeddings, embeddings)
-    if estimator._metrics is not None:
-        estimator.skip_eval(False)
+    if estimator.metrics is not None:
+        estimator.skip_eval = False
         df = pd.DataFrame(reconstruction, columns=['left', 'right', 'score'])
-        estimator._metrics(probabilities=df, labels=ground_truth)
-        return estimator._metrics.scores
+        estimator.metrics(probabilities=df, labels=ground_truth)
+        return estimator.metrics.scores
     return reconstruction
 
 
@@ -146,6 +147,7 @@ def reconstruct(embeddings, ground_truth, options):
     """
     metrics = Metrics(names=options.metric_names, k_values=options.k_values) \
         if options.metric_names is not None and len(options.metric_names) > 0 else None
+
     def filter_edges(recon):
         indices = np.where(recon > threshold)
         return list(zip(indices[0], indices[1], recon[indices]))

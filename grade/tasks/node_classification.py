@@ -12,10 +12,10 @@ its magic method `__call__`.
 """
 
 
-from metrics import Metrics, compile_metrics
-from estimators import Estimator
-from nrlio import Reader
-from helpers import *
+from grade.metrics import Metrics, compile_metrics
+from grade.estimators import Estimator
+from grade.nrlio import Reader
+from grade.helpers import *
 
 import sys
 

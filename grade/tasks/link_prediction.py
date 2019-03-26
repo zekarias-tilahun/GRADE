@@ -30,10 +30,10 @@ symmetric.
 Code snippets are indicated using `>>>`
 """
 
-from estimators import Estimator, ScoreEstimator
-from metrics import Metrics, compile_metrics
-from helpers import *
-from nrlio import *
+from grade.estimators import Estimator, ScoreEstimator
+from grade.metrics import Metrics, compile_metrics
+from grade.helpers import *
+from grade.nrlio import *
 
 import numpy as np
 

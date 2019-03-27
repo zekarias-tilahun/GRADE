@@ -96,7 +96,9 @@ class Metrics:
     def __init__(self, names=None, pos_label=1, k_values=None):
         """
         A wrapper class to execute different evaluation metrics depending
-        on the specified names
+        on the specified names. Any class inherting this object needs to
+        implement the _compute method of the Metrics class and should 
+        alter the scores state.
 
         Parameters
         ----------
@@ -121,7 +123,7 @@ class Metrics:
         self._k_values = k_values
         self.scores = []
 
-    def __compute(self, y_true, y_hat, probabilities, labels):
+    def _compute(self, y_true, y_hat, probabilities, labels):
         """
         Carries out the actual execution of the specified evaluation metrics
 
@@ -188,4 +190,4 @@ class Metrics:
             for the i-th index of the probabilities data frame, or 2d-numpy array, which
             corresponds to the adjacency matrix.
         """
-        self.__compute(y_true=y_true, y_hat=y_hat, probabilities=probabilities, labels=labels)
+        self._compute(y_true=y_true, y_hat=y_hat, probabilities=probabilities, labels=labels)

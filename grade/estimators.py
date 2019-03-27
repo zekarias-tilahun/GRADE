@@ -83,7 +83,7 @@ class Estimator:
 
         If a metrics object is passed to the estimator, then a score will be computed
         using the test set labels as a ground truth, otherwise the ground-truth test
-        labels and the corresponding predicted labels will be returned.
+        labels and the corresponding predicted labels will be the final results.
 
         Parameters
         ---------
@@ -91,10 +91,6 @@ class Estimator:
                     The features
         labels : numpy array
                     The labels
-
-        Returns
-        -------
-        A dictionary or a list of dictionaries
 
         See Also
         --------
@@ -121,16 +117,12 @@ class Estimator:
         the specified training size. The model is then used to predict the labels of the
         test set. If a metrics object is passed to the estimator, then a score will be
         computed using the test set labels as a ground truth, otherwise the test labels
-        and the predict labels will be returned.
+        and the predict labels will be the final results.
 
         Parameters
         ----------
         features : The features
         labels : The labels
-
-        Returns
-        -------
-        A dictionary or a list of dictionaries
 
         See Also
         --------
@@ -176,16 +168,21 @@ class ScoreEstimator(Estimator):
         
         Parameters
         ----------
-        embeddings : An embedding matrix, this should be specified
-        left_nodes : A list of indices to the embedding matrix, optional.
-        right_nodes : A list of indices to the embedding matrix, optional.
-        labels: If the left_nodes and right_nodes are provided, then labels
-            should specify the label associated to each pair of left_node,
-            right_node. Otherwise, Should be a sparse or dense adjacency
+        embeddings : a numpy array or a tuple with two numpy arrays
+            An array is an embedding matrix, and it should be specified
+        left_nodes : list, 1d numpy array
+            A list of indices to the embedding matrix, optional.
+        right_nodes : list, 1d numpy array
+            A list of indices to the embedding matrix, optional.
+        labels: 1d or 2d numpy array
+            If the left_nodes and right_nodes are provided, then labels
+            should specify the label associated to each pair of (left_node,
+            right_node) Otherwise, should be an N x N sparse or dense adjacency
             matrix like numpy array. Labels can be non if the estimator's
             metrics object inherited from the base class is None
+        threshold: If a threshold is specified, it will be used to discard
+            scores smaller than the threshold, optional.
 
-        :return:
         """
         if 'embeddings' in kwargs:
             emb = kwargs['embeddings']
@@ -201,9 +198,20 @@ class ScoreEstimator(Estimator):
             left_emb = left_emb[left_indices]
             right_emb = right_emb[right_indices]
             sim_fun = row_dot if self._element_wise else dot
-            probabilities = list(zip(left_indices, right_indices, sigmoid(sim_fun(left_emb, right_emb))))
+            scores = sigmoid(sim_fun(left_emb, right_emb))
+            th = kwargs['threshold'] if 'threshold' in kwargs else 0.
+            if self._element_wise:
+                probabilities = np.array(list(zip(left_indices, right_indices, scores)))
+                probabilities = probabilities[probabilities[:, 2] > th]
+            else:
+                # Here scores is an n x n array due to the pair-wise dot product of left_emb and 
+                # right_emb and hence the following code melts it into a list of tuples of each  
+                # with three values [(left, right, score)]
+                scores[scores < th] = 0
+                probabilities = scores
+                
             if self.metrics is None or self.skip_eval:
-                self.results = np.array(probabilities)
+                self.results = np.array(probabilities) if self._element_wise else probabilities
             else:
                 if 'labels' in kwargs:
                     labels = kwargs['labels']
@@ -211,6 +219,7 @@ class ScoreEstimator(Estimator):
                     self.metrics(probabilities=probabilities, labels=labels)
                     self.results = self.metrics.scores
                 else:
-                    raise ValueError("The argument labels can not be empty when a metrics object is specified")
+                    raise ValueError("The argument labels can not be empty when a metrics object is specified, or "
+                                     "you can suspend evaluation by setting the Estimator.skip_eval to True")
         else:
             raise ValueError('The __call__ magic method expects the embeddings and labels argument')

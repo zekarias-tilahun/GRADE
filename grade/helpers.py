@@ -237,8 +237,10 @@ class ConfigParser:
         Options for carrying out network reconstruction experiment
 
         """
-        self.threshold = self._config.getfloat(section='net-reconstruction-args', option='threshold')
-        self.batch_size = self._config.getint(section='net-reconstruction-args', option='batch_size')
+        th = self._config.get(section='net-reconstruction-args', option='threshold')
+        self.threshold = 0. if th is None else float(th)
+        bs = self._config.getint(section='net-reconstruction-args', option='batch_size')
+        self.batch_size = 0 if bs is None else int(bs)
         self.__graph_args()
         self.__embedding_args()
         self.__eval_metric_args()

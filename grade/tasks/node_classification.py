@@ -56,8 +56,8 @@ def main():
         results += [{**{'train_size': ts}, **score} for score in scores]
         
     if metrics is not None:
-        by = ['train_size', 'metrics']
-        return compile_metrics(results_lod=results, by=by, target='value', agg=options.cv > 1)
+        by, target = (['train_size', 'metrics'], 'value') if options.cv > 1 else (None, None)
+        return compile_metrics(results_lod=results, by=by, target=target)
     else:
         return results
 

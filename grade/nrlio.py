@@ -94,6 +94,11 @@ class Reader(object):
 
         """
         return not isinstance(self.embeddings, tuple)
+    
+    @property
+    def adjacency_matrix(self):
+        nodes = sorted(self.network.nodes)
+        return nx.to_scipy_sparse_matrix(self.network, nodelist=nodes)
 
 
 class Writer:

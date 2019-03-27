@@ -2,7 +2,7 @@
 Author: Zekarias Tilahun Kefato
 
 Network Reconstruction
-===============
+======================
 
 This module provides a utility for evaluating the performance of a
 graph embedding algorithm in effectively capturing the structural
@@ -22,8 +22,10 @@ this module by calling the `reconstruct` method
 """
 
 from grade.estimators import ScoreEstimator
+from grade.metrics import Metrics
 from grade.nrlio import Reader
 from grade.helpers import *
+
 
 import pandas as pd
 import numpy as np
@@ -31,7 +33,7 @@ import numpy as np
 import sys
 
 
-def _full_reconstruction(embeddings, estimator, ground_truth=None):
+def _full_reconstruction(embeddings, estimator, ground_truth, options):
     """
     Network reconstruction computed based on the similarity between
     every pair of nodes (n*n - run-time), where the similarity
@@ -59,11 +61,30 @@ def _full_reconstruction(embeddings, estimator, ground_truth=None):
     ... # For asymmetric reconstruction
 
     """
-    estimator(embeddings=embeddings, labels=ground_truth)
-    return [estimator.results]
+    
+    if isinstance(embeddings, tuple):
+        print('Running a full asymmetric network reconstruction')
+        estimator.skip_eval = True
+        estimator(embeddings=embeddings, threshold=options.threshold)
+        forward_results = estimator.results
+        estimator(embeddings=(embeddings[1], embeddings[0]), threshold=options.threshold)
+        backward_results = estimator.results
+        combined_results = np.where(forward_results > 0, forward_results, backward_results)
+        if estimator.metrics is not None:
+            indices = combined_results.nonzero()
+            probabilities = pd.DataFrame(
+                list(zip(indices[0], indices[1], combined_results[indices])), 
+                columns=['left', 'right', 'score'])
+            estimator.metrics(probabilities=probabilities, labels=ground_truth)
+            return estimator.metrics.scores
+        return combined_results
+    else:
+        print('Running a full symmetric network reconstruction')
+        estimator(embeddings=embeddings, labels=ground_truth)
+        return estimator.results
 
 
-def _batch_reconstruction(embeddings, ground_truth, estimator, batch_size, threshold=0.7):
+def _batch_reconstruction(embeddings, ground_truth, estimator, options):
     """
     Batch network reconstruction; useful when the number of nodes is large.
     For every batch the similarity between the nodes in the batch with the
@@ -77,30 +98,32 @@ def _batch_reconstruction(embeddings, ground_truth, estimator, batch_size, thres
     Parameters
     ----
     embeddings : A numpy array or a tuple of two numpy arrays
-                An array should be (n x d)
+        An array should be (n x d)
                     n - the number of nodes and
 
                     d - the embedding dimension
-    batch_size : int
-                Batch size
-    threshold : float
-                A threshold for pruning
-
-    :return: list,
-                A list of edges along with their weight estimated using the
-                similarity between the embedding of the nodes
+    estimator : 
+        An estimators object
+    options : 
+        The input options
+        
+    Returns
+    -------
+    numpy array if metrics is not specified otherwise a list of dictionary
     """
 
     def delegate(source_emb, target_emb):
         num_nodes = source_emb.shape[0]
         partial_reconstruction = []
         estimator.skip_eval = True
-        for i in range(0, source_emb.shape[0], batch_size):
-            end = i + batch_size if num_nodes - batch_size > i else num_nodes
+        for i in range(0, source_emb.shape[0], options.batch_size):
+            end = i + options.batch_size if num_nodes - options.batch_size > i else num_nodes
             batch_nodes = list(range(i, end))
             batch_embedding = source_emb[batch_nodes]
-            estimator(embeddings=(batch_embedding, target_emb), labels=ground_truth)
-            filtered_batch = estimator.results[estimator.results[:, 2] > threshold]
+            estimator(embeddings=(batch_embedding, target_emb), threshold=options.threshold)
+            filtered_indices = estimator.results.nonzero()
+            filtered_batch = np.array(list(zip(
+                filtered_indices[0], filtered_indices[1], estimator.results[filtered_indices])))
             if len(partial_reconstruction) == 0:
                 partial_reconstruction = filtered_batch
             else:
@@ -119,7 +142,6 @@ def _batch_reconstruction(embeddings, ground_truth, estimator, batch_size, thres
               f'and a threshold {threshold}')
         reconstruction = delegate(embeddings, embeddings)
     if estimator.metrics is not None:
-        estimator.skip_eval = False
         df = pd.DataFrame(reconstruction, columns=['left', 'right', 'score'])
         estimator.metrics(probabilities=df, labels=ground_truth)
         return estimator.metrics.scores
@@ -147,24 +169,16 @@ def reconstruct(embeddings, ground_truth, options):
     """
     metrics = Metrics(names=options.metric_names, k_values=options.k_values) \
         if options.metric_names is not None and len(options.metric_names) > 0 else None
-
-    def filter_edges(recon):
-        indices = np.where(recon > threshold)
-        return list(zip(indices[0], indices[1], recon[indices]))
+        
     estimator = ScoreEstimator(element_wise=False, metrics=metrics)
-    if batch_size is None or batch_size == 0:
-        link_probabilities = _full_reconstruction(
-            embeddings=embeddings, estimator=estimator, ground_truth=ground_truth)
-        if len(link_probabilities) == 2:
-            edges = filter_edges(link_probabilities[0]) + filter_edges(link_probabilities[1])
-        else:
-            edges = filter_edges(link_probabilities)
+    if options.batch_size is None or options.batch_size == 0:
+        results = _full_reconstruction(
+            embeddings=embeddings, estimator=estimator, ground_truth=ground_truth, options=options)
     else:
-        edges = _batch_reconstruction(
-            embeddings=embeddings, estimator=estimator,
-            batch_size=batch_size, threshold=threshold)
+        results = _batch_reconstruction(
+            embeddings=embeddings, estimator=estimator, ground_truth=ground_truth, options=options)
     
-    return sorted(edges, key=lambda l: l[2], reverse=True)
+    return pd.DataFrame(results)
 
 
 def main():
@@ -180,7 +194,9 @@ def main():
         parser = ConfigParser(task=Const.NET_RECONSTRUCTION_TASK)
         options = parser
     reader = Reader(task=Const.NET_RECONSTRUCTION_TASK, options=options)
-    reconstruction = reconstruct(embeddings=reader.embeddings, ground_truth=reader.network, options=options)
+    reconstruction = reconstruct(
+        embeddings=reader.embeddings, ground_truth=reader.adjacency_matrix, options=options)
+    print(reconstruction)
     return reconstruction
 
 

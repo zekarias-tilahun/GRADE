@@ -49,13 +49,13 @@ def _precision_at_k_values(probabilities, labels, k_values=None):
     assert dim == 1 or dim == 2, f"Expecting a 1d or 2d array for labels argument, but found a {dim}d array"
     sorted_probabilities = probabilities.sort_values(by='score', ascending=False)
     if k_values is None:
-        return labels[labels == 1] / labels.size
+        return labels[labels == 1].shape[0] / labels.shape[0]
     precision_aks = []
     for k in k_values:
         df_k = sorted_probabilities.iloc[:k]
-        indices = df_k.index if dim == 1 else (df_k.values[0], df_k.values[1])
+        indices = df_k.index if dim == 1 else (df_k.values[:, 0].astype(int).tolist(), 
+                                               df_k.values[:, 1].astype(int).tolist())
         ordered_labels_k = labels[indices]
-        
         pak = ordered_labels_k[ordered_labels_k == 1].size / k
         precision_aks += [{'k': k, 'value': pak}]
     return precision_aks

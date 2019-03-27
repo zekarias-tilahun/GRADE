@@ -30,8 +30,9 @@ To run GRADE a few inputs should be provided, currently there are two ways to do
 - Using the command line arguments (Not-complet):
 
 ### Example usage
+The following usage assumes that the necessary input options for link prediction are specified in the config.ini
 ```sh
-$ cd tasks
+$ cd grade/tasks
 $ python link_prediction.py
 ```
 

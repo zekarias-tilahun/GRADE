@@ -47,7 +47,6 @@ def main():
         options = ConfigParser(task=Const.NODE_CLASSIFICATION_TASK)
         
     reader = Reader(task=Const.NODE_CLASSIFICATION_TASK, options=options)
-    print(reader.embeddings)
     metrics = Metrics(names=options.metric_names) \
         if options.metric_names is not None and len(options.metric_names) > 0 else None
     results = []

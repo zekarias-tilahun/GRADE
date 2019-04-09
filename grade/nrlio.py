@@ -197,7 +197,7 @@ def read_embedding(path, input_format=None, keys=None):
         elif input_format == 'mattxt':
             return np.loadtxt(path)
         elif input_format == 'w2v':
-            emb_frame = pd.read_csv(path, header=None, skiprows=1)
+            emb_frame = pd.read_csv(path, header=None, skiprows=1, delimiter=r'\s+')
             emb_frame.sort_values(0, inplace=True)
             emb_frame.dropna(axis=1, how='all', inplace=True)
             return emb_frame.values[:, 1:]
